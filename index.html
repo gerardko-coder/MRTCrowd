@@ -77,27 +77,22 @@
       color: var(--primary);
     }
 
-    input[type="text"] {
+    select {
       width: 100%;
       padding: 12px 16px;
       font-size: 1rem;
       border: 2px solid var(--border);
       border-radius: 8px;
       outline: none;
-      text-transform: uppercase;
+      background-color: #fff;
+      color: var(--text);
+      cursor: pointer;
       transition: border-color 0.2s;
+      appearance: auto;
     }
 
-    input[type="text"]:focus {
+    select:focus {
       border-color: var(--accent);
-    }
-
-    .station-name-preview {
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: var(--accent);
-      margin-top: 6px;
-      min-height: 1.2em;
     }
 
     button {
@@ -201,15 +196,10 @@
 
     <form id="search-form">
       <div class="form-group">
-        <label for="station-code">Station Code</label>
-        <input 
-          type="text" 
-          id="station-code" 
-          placeholder="e.g. NS1, EW24, DT19, CC1" 
-          autocomplete="off" 
-          required
-        />
-        <div id="station-preview" class="station-name-preview"></div>
+        <label for="station-select">Select Station</label>
+        <select id="station-select" required>
+          <option value="" disabled selected>-- Choose an MRT Station --</option>
+        </select>
       </div>
 
       <button type="submit" id="submit-btn">Check Crowdedness</button>
@@ -225,7 +215,63 @@
   </div>
 
   <script>
-    // Station prefix mapping to official LTA TrainLine parameters
+    // Structured Station Master Dataset grouped by MRT Line
+    const stationData = {
+      "North-South Line (NSL)": {
+        "NS1": "Jurong East", "NS2": "Bukit Batok", "NS3": "Bukit Gombak", "NS4": "Choa Chu Kang",
+        "NS5": "Yew Tee", "NS7": "Kranji", "NS8": "Marsiling", "NS9": "Woodlands",
+        "NS10": "Admiralty", "NS11": "Sembawang", "NS12": "Canberra", "NS13": "Yishun",
+        "NS14": "Khatib", "NS15": "Yio Chu Kang", "NS16": "Ang Mo Kio", "NS17": "Bishan",
+        "NS18": "Braddell", "NS19": "Toa Payoh", "NS20": "Novena", "NS21": "Newton",
+        "NS22": "Orchard", "NS23": "Somerset", "NS24": "Dhoby Ghaut", "NS25": "City Hall",
+        "NS26": "Raffles Place", "NS27": "Marina Bay", "NS28": "Marina South Pier"
+      },
+      "East-West Line (EWL)": {
+        "EW1": "Pasir Ris", "EW2": "Tampines", "EW3": "Simei", "EW4": "Tanah Merah",
+        "EW5": "Bedok", "EW6": "Kembangan", "EW7": "Eunos", "EW8": "Paya Lebar",
+        "EW9": "Aljunied", "EW10": "Kallang", "EW11": "Lavender", "EW12": "Bugis",
+        "EW13": "City Hall", "EW14": "Raffles Place", "EW15": "Tanjong Pagar", "EW16": "Outram Park",
+        "EW17": "Tiong Bahru", "EW18": "Redhill", "EW19": "Queenstown", "EW20": "Commonwealth",
+        "EW21": "Buona Vista", "EW22": "Dover", "EW23": "Clementi", "EW24": "Jurong East",
+        "EW25": "Chinese Garden", "EW26": "Lakeside", "EW27": "Boon Lay", "EW28": "Pioneer",
+        "EW29": "Joo Koon", "EW30": "Gul Circle", "EW31": "Tuas Crescent", "EW32": "Tuas West Road", "EW33": "Tuas Link"
+      },
+      "North East Line (NEL)": {
+        "NE1": "HarbourFront", "NE3": "Outram Park", "NE4": "Chinatown", "NE5": "Clarke Quay",
+        "NE6": "Dhoby Ghaut", "NE7": "Little India", "NE8": "Farrer Park", "NE9": "Boon Keng",
+        "NE10": "Potong Pasir", "NE11": "Woodleigh", "NE12": "Serangoon", "NE13": "Kovan",
+        "NE14": "Hougang", "NE15": "Buangkok", "NE16": "Sengkang", "NE17": "Punggol"
+      },
+      "Circle Line (CCL)": {
+        "CC1": "Dhoby Ghaut", "CC2": "Bras Basah", "CC3": "Esplanade", "CC4": "Promenade",
+        "CC5": "Nicoll Highway", "CC6": "Stadium", "CC7": "Mountbatten", "CC8": "Dakota",
+        "CC9": "Paya Lebar", "CC10": "MacPherson", "CC11": "Tai Seng", "CC12": "Bartley",
+        "CC13": "Serangoon", "CC14": "Lorong Chuan", "CC15": "Bishan", "CC16": "Marymount",
+        "CC17": "Caldecott", "CC19": "Botanic Gardens", "CC20": "Farrer Road", "CC21": "Holland Village",
+        "CC22": "Buona Vista", "CC23": "one-north", "CC24": "Kent Ridge", "CC25": "Haw Par Villa",
+        "CC26": "Pasir Panjang", "CC27": "Labrador Park", "CC28": "Telok Blangah", "CC29": "HarbourFront"
+      },
+      "Downtown Line (DTL)": {
+        "DT1": "Bukit Panjang", "DT2": "Cashew", "DT3": "Hillview", "DT5": "Beauty World",
+        "DT6": "King Albert Park", "DT7": "Sixth Avenue", "DT8": "Tan Kah Kee", "DT9": "Botanic Gardens",
+        "DT10": "Stevens", "DT11": "Newton", "DT12": "Little India", "DT13": "Rochor",
+        "DT14": "Bugis", "DT15": "Promenade", "DT16": "Bayfront", "DT17": "Downtown",
+        "DT18": "Telok Ayer", "DT19": "Chinatown", "DT20": "Fort Canning", "DT21": "Bencoolen",
+        "DT22": "Jalan Besar", "DT23": "Bendemeer", "DT24": "Geylang Bahru", "DT25": "Mattar",
+        "DT26": "MacPherson", "DT27": "Ubi", "DT28": "Kaki Bukit", "DT29": "Bedok North",
+        "DT30": "Bedok Reservoir", "DT31": "Tampines West", "DT32": "Tampines", "DT33": "Tampines East",
+        "DT34": "Upper Changi", "DT35": "Expo"
+      },
+      "Thomson-East Coast Line (TEL)": {
+        "TE1": "Woodlands North", "TE2": "Woodlands", "TE3": "Woodlands South", "TE4": "Springleaf",
+        "TE5": "Lentor", "TE6": "Mayflower", "TE7": "Bright Hill", "TE8": "Upper Thomson",
+        "TE9": "Caldecott", "TE11": "Stevens", "TE12": "Napier", "TE13": "Orchard Boulevard",
+        "TE14": "Orchard", "TE15": "Great World", "TE16": "Havelock", "TE17": "Outram Park",
+        "TE18": "Maxwell", "TE19": "Shenton Way", "TE20": "Marina Bay", "TE22": "Gardens by the Bay"
+      }
+    };
+
+    // Mapping station prefixes to LTA API TrainLine parameter values
     const trainLineMap = {
       "NS": "NSL",
       "EW": "EWL",
@@ -234,68 +280,13 @@
       "CC": "CCL",
       "CE": "CCL",
       "DT": "DTL",
-      "TE": "TEL",
-      "BP": "BPL",
-      "SE": "SLRT",
-      "SW": "SLRT",
-      "PE": "PLRT",
-      "PW": "PLRT"
+      "TE": "TEL"
     };
 
-    // Common Station Code Mapping for Name Lookup
-    const stationMap = {
-      "NS1": "Jurong East", "NS2": "Bukit Batok", "NS3": "Bukit Gombak", "NS4": "Choa Chu Kang",
-      "NS5": "Yew Tee", "NS7": "Kranji", "NS8": "Marsiling", "NS9": "Woodlands",
-      "NS10": "Admiralty", "NS11": "Sembawang", "NS12": "Canberra", "NS13": "Yishun",
-      "NS14": "Khatib", "NS15": "Yio Chu Kang", "NS16": "Ang Mo Kio", "NS17": "Bishan",
-      "NS18": "Braddell", "NS19": "Toa Payoh", "NS20": "Novena", "NS21": "Newton",
-      "NS22": "Orchard", "NS23": "Somerset", "NS24": "Dhoby Ghaut", "NS25": "City Hall",
-      "NS26": "Raffles Place", "NS27": "Marina Bay", "NS28": "Marina South Pier",
+    // Flat lookup for station code to name
+    const flatStationMap = {};
 
-      "EW1": "Pasir Ris", "EW2": "Tampines", "EW3": "Simei", "EW4": "Tanah Merah",
-      "EW5": "Bedok", "EW6": "Kembangan", "EW7": "Eunos", "EW8": "Paya Lebar",
-      "EW9": "Aljunied", "EW10": "Kallang", "EW11": "Lavender", "EW12": "Bugis",
-      "EW13": "City Hall", "EW14": "Raffles Place", "EW15": "Tanjong Pagar", "EW16": "Outram Park",
-      "EW17": "Tiong Bahru", "EW18": "Redhill", "EW19": "Queenstown", "EW20": "Commonwealth",
-      "EW21": "Buona Vista", "EW22": "Dover", "EW23": "Clementi", "EW24": "Jurong East",
-      "EW25": "Chinese Garden", "EW26": "Lakeside", "EW27": "Boon Lay", "EW28": "Pioneer",
-      "EW29": "Joo Koon", "EW30": "Gul Circle", "EW31": "Tuas Crescent", "EW32": "Tuas West Road", "EW33": "Tuas Link",
-
-      "NE1": "HarbourFront", "NE3": "Outram Park", "NE4": "Chinatown", "NE5": "Clarke Quay",
-      "NE6": "Dhoby Ghaut", "NE7": "Little India", "NE8": "Farrer Park", "NE9": "Boon Keng",
-      "NE10": "Potong Pasir", "NE11": "Woodleigh", "NE12": "Serangoon", "NE13": "Kovan",
-      "NE14": "Hougang", "NE15": "Buangkok", "NE16": "Sengkang", "NE17": "Punggol",
-
-      "CC1": "Dhoby Ghaut", "CC2": "Bras Basah", "CC3": "Esplanade", "CC4": "Promenade",
-      "CC5": "Nicoll Highway", "CC6": "Stadium", "CC7": "Mountbatten", "CC8": "Dakota",
-      "CC9": "Paya Lebar", "CC10": "MacPherson", "CC11": "Tai Seng", "CC12": "Bartley",
-      "CC13": "Serangoon", "CC14": "Lorong Chuan", "CC15": "Bishan", "CC16": "Marymount",
-      "CC17": "Caldecott", "CC19": "Botanic Gardens", "CC20": "Farrer Road", "CC21": "Holland Village",
-      "CC22": "Buona Vista", "CC23": "one-north", "CC24": "Kent Ridge", "CC25": "Haw Par Villa",
-      "CC26": "Pasir Panjang", "CC27": "Labrador Park", "CC28": "Telok Blangah", "CC29": "HarbourFront",
-
-      "DT1": "Bukit Panjang", "DT2": "Cashew", "DT3": "Hillview", "DT5": "Beauty World",
-      "DT6": "King Albert Park", "DT7": "Sixth Avenue", "DT8": "Tan Kah Kee", "DT9": "Botanic Gardens",
-      "DT10": "Stevens", "DT11": "Newton", "DT12": "Little India", "DT13": "Rochor",
-      "DT14": "Bugis", "DT15": "Promenade", "DT16": "Bayfront", "DT17": "Downtown",
-      "DT18": "Telok Ayer", "DT19": "Chinatown", "DT20": "Fort Canning", "DT21": "Bencoolen",
-      "DT22": "Jalan Besar", "DT23": "Bendemeer", "DT24": "Geylang Bahru", "DT25": "Mattar",
-      "DT26": "MacPherson", "DT27": "Ubi", "DT28": "Kaki Bukit", "DT29": "Bedok North",
-      "DT30": "Bedok Reservoir", "DT31": "Tampines West", "DT32": "Tampines", "DT33": "Tampines East",
-      "DT34": "Upper Changi", "DT35": "Expo",
-
-      "TE1": "Woodlands North", "TE2": "Woodlands", "TE3": "Woodlands South", "TE4": "Springleaf",
-      "TE5": "Lentor", "TE6": "Mayflower", "TE7": "Bright Hill", "TE8": "Upper Thomson",
-      "TE9": "Caldecott", "TE11": "Stevens", "TE12": "Napier", "TE13": "Orchard Boulevard",
-      "TE14": "Orchard", "TE15": "Great World", "TE16": "Havelock", "TE17": "Outram Park",
-      "TE18": "Maxwell", "TE19": "Shenton Way", "TE20": "Marina Bay", "TE22": "Gardens by the Bay"
-    };
-
-    const API_BASE = "https://datamall2.mytransport.sg/ltaodataservice/PCDRealTime";
-    const API_KEY = "mlfDLYgcQGS+KM8/azN30Q==";
-
-    const inputEl = document.getElementById("station-code");
-    const previewEl = document.getElementById("station-preview");
+    const selectEl = document.getElementById("station-select");
     const formEl = document.getElementById("search-form");
     const submitBtn = document.getElementById("submit-btn");
     const resultBox = document.getElementById("result-box");
@@ -303,20 +294,33 @@
     const resStationName = document.getElementById("res-station-name");
     const resLevel = document.getElementById("res-level");
 
-    // Dynamic Station Name preview
-    inputEl.addEventListener("input", () => {
-      const code = inputEl.value.trim().toUpperCase();
-      if (stationMap[code]) {
-        previewEl.textContent = `📍 ${stationMap[code]}`;
-      } else {
-        previewEl.textContent = "";
+    const API_BASE = "https://datamall2.mytransport.sg/ltaodataservice/PCDRealTime";
+    const API_KEY = "mlfDLYgcQGS+KM8/azN30Q==";
+
+    // Populate drop-down list dynamically with optgroups per train line
+    function populateDropdown() {
+      for (const [lineName, stations] of Object.entries(stationData)) {
+        const optgroup = document.createElement("optgroup");
+        optgroup.label = lineName;
+
+        for (const [code, name] of Object.entries(stations)) {
+          flatStationMap[code] = name;
+          const option = document.createElement("option");
+          option.value = code;
+          option.textContent = `${name} (${code})`;
+          optgroup.appendChild(option);
+        }
+
+        selectEl.appendChild(optgroup);
       }
-    });
+    }
+
+    populateDropdown();
 
     formEl.addEventListener("submit", async (e) => {
       e.preventDefault();
       
-      const code = inputEl.value.trim().toUpperCase();
+      const code = selectEl.value;
       if (!code) return;
 
       errorBox.style.display = "none";
@@ -336,18 +340,15 @@
     });
 
     async function fetchCrowdData(stationCode) {
-      // Extract prefix (e.g. NS, EW, DT)
       const prefixMatch = stationCode.match(/^[A-Z]+/);
       const prefix = prefixMatch ? prefixMatch[0] : "";
       
       const trainLine = trainLineMap[prefix];
       if (!trainLine) {
-        throw new Error(`Invalid line code in "${stationCode}". Use valid codes like NS1, EW24, DT19, CC1.`);
+        throw new Error(`Invalid line code in "${stationCode}".`);
       }
 
       const targetUrl = `${API_BASE}?TrainLine=${trainLine}`;
-
-      // Try via CORS proxy fallback directly since local file browsers block raw cross-origin headers
       const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
       
       let response;
@@ -360,7 +361,6 @@
           }
         });
       } catch (e) {
-        // Retry direct if proxy fails
         response = await fetch(targetUrl, {
           method: "GET",
           headers: {
@@ -372,7 +372,7 @@
 
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error(`API returned 404. TrainLine "${trainLine}" might currently be unavailable or out of operating hours.`);
+          throw new Error(`API returned 404 for TrainLine "${trainLine}". Data might be unavailable or station closed.`);
         }
         throw new Error(`API Request failed with HTTP Status ${response.status}`);
       }
@@ -384,17 +384,15 @@
     function parseStationCrowd(data, stationCode) {
       const records = data.value || [];
 
-      // Look for exact station code match in returned array
       const match = records.find(item => 
         (item.Station && item.Station.toUpperCase() === stationCode) ||
         (item.StationCode && item.StationCode.toUpperCase() === stationCode)
       );
 
       if (!match) {
-        throw new Error(`No real-time crowd data found for station "${stationCode}". Note: Data is only published during operating hours.`);
+        throw new Error(`No real-time crowd data found for station "${stationCode}". Data is published during station operating hours.`);
       }
 
-      // Read crowd density indicator ('l'/'low', 'm'/'moderate', 'h'/'high')
       let levelRaw = (match.CrowdLevel || match.CrowdDensity || "l").toString().toLowerCase();
       
       if (levelRaw.startsWith("l")) return "low";
@@ -405,8 +403,8 @@
     }
 
     function displayResult(stationCode, crowdLevel) {
-      const name = stationMap[stationCode] 
-        ? `${stationMap[stationCode]} (${stationCode})`
+      const name = flatStationMap[stationCode] 
+        ? `${flatStationMap[stationCode]} (${stationCode})`
         : stationCode;
 
       resStationName.textContent = name;
