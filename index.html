@@ -77,10 +77,6 @@
       color: var(--primary);
     }
 
-    .input-wrapper {
-      position: relative;
-    }
-
     input[type="text"] {
       width: 100%;
       padding: 12px 16px;
@@ -206,15 +202,13 @@
     <form id="search-form">
       <div class="form-group">
         <label for="station-code">Station Code</label>
-        <div class="input-wrapper">
-          <input 
-            type="text" 
-            id="station-code" 
-            placeholder="e.g. NS1, EW24, DT19" 
-            autocomplete="off" 
-            required
-          />
-        </div>
+        <input 
+          type="text" 
+          id="station-code" 
+          placeholder="e.g. NS1, EW24, DT19, CC1" 
+          autocomplete="off" 
+          required
+        />
         <div id="station-preview" class="station-name-preview"></div>
       </div>
 
@@ -231,7 +225,24 @@
   </div>
 
   <script>
-    // Common Station Code Mapping for Dynamic Name Lookup
+    // Station prefix mapping to official LTA TrainLine parameters
+    const trainLineMap = {
+      "NS": "NSL",
+      "EW": "EWL",
+      "CG": "EWL",
+      "NE": "NEL",
+      "CC": "CCL",
+      "CE": "CCL",
+      "DT": "DTL",
+      "TE": "TEL",
+      "BP": "BPL",
+      "SE": "SLRT",
+      "SW": "SLRT",
+      "PE": "PLRT",
+      "PW": "PLRT"
+    };
+
+    // Common Station Code Mapping for Name Lookup
     const stationMap = {
       "NS1": "Jurong East", "NS2": "Bukit Batok", "NS3": "Bukit Gombak", "NS4": "Choa Chu Kang",
       "NS5": "Yew Tee", "NS7": "Kranji", "NS8": "Marsiling", "NS9": "Woodlands",
@@ -280,7 +291,7 @@
       "TE18": "Maxwell", "TE19": "Shenton Way", "TE20": "Marina Bay", "TE22": "Gardens by the Bay"
     };
 
-    const API_URL = "https://datamall2.mytransport.sg/ltaodataservice/PCDRealTime";
+    const API_BASE = "https://datamall2.mytransport.sg/ltaodataservice/PCDRealTime";
     const API_KEY = "mlfDLYgcQGS+KM8/azN30Q==";
 
     const inputEl = document.getElementById("station-code");
@@ -292,13 +303,11 @@
     const resStationName = document.getElementById("res-station-name");
     const resLevel = document.getElementById("res-level");
 
-    // Dynamic Station Name lookup as user types
+    // Dynamic Station Name preview
     inputEl.addEventListener("input", () => {
       const code = inputEl.value.trim().toUpperCase();
       if (stationMap[code]) {
         previewEl.textContent = `📍 ${stationMap[code]}`;
-      } else if (code.length >= 2) {
-        previewEl.textContent = "Station code not in local list (will query API)";
       } else {
         previewEl.textContent = "";
       }
@@ -310,7 +319,6 @@
       const code = inputEl.value.trim().toUpperCase();
       if (!code) return;
 
-      // Reset UI
       errorBox.style.display = "none";
       resultBox.style.display = "none";
       submitBtn.disabled = true;
@@ -328,45 +336,45 @@
     });
 
     async function fetchCrowdData(stationCode) {
-      // Determine train line prefix (e.g. NS, EW, DT, CC, TE, NE)
-      const lineMatch = stationCode.match(/^[A-Z]+/);
-      const trainLine = lineMatch ? lineMatch[0] : "";
-
-      let targetUrl = API_URL;
-      if (trainLine) {
-        targetUrl += `?TrainLine=${trainLine}`;
+      // Extract prefix (e.g. NS, EW, DT)
+      const prefixMatch = stationCode.match(/^[A-Z]+/);
+      const prefix = prefixMatch ? prefixMatch[0] : "";
+      
+      const trainLine = trainLineMap[prefix];
+      if (!trainLine) {
+        throw new Error(`Invalid line code in "${stationCode}". Use valid codes like NS1, EW24, DT19, CC1.`);
       }
 
-      // Try direct API call first
+      const targetUrl = `${API_BASE}?TrainLine=${trainLine}`;
+
+      // Try via CORS proxy fallback directly since local file browsers block raw cross-origin headers
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      
+      let response;
       try {
-        const response = await fetch(targetUrl, {
+        response = await fetch(proxyUrl, {
           method: "GET",
           headers: {
             "AccountKey": API_KEY,
             "accept": "application/json"
           }
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          return parseStationCrowd(data, stationCode);
-        }
       } catch (e) {
-        console.warn("Direct API call blocked (likely CORS). Retrying via proxy fallback...");
+        // Retry direct if proxy fails
+        response = await fetch(targetUrl, {
+          method: "GET",
+          headers: {
+            "AccountKey": API_KEY,
+            "accept": "application/json"
+          }
+        });
       }
 
-      // Fallback via CORS proxy if direct fetch is blocked by browser policy
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-      const response = await fetch(proxyUrl, {
-        method: "GET",
-        headers: {
-          "AccountKey": API_KEY,
-          "accept": "application/json"
-        }
-      });
-
       if (!response.ok) {
-        throw new Error(`API Request failed with status ${response.status}`);
+        if (response.status === 404) {
+          throw new Error(`API returned 404. TrainLine "${trainLine}" might currently be unavailable or out of operating hours.`);
+        }
+        throw new Error(`API Request failed with HTTP Status ${response.status}`);
       }
 
       const data = await response.json();
@@ -375,25 +383,25 @@
 
     function parseStationCrowd(data, stationCode) {
       const records = data.value || [];
-      
-      // Match exact station code
+
+      // Look for exact station code match in returned array
       const match = records.find(item => 
         (item.Station && item.Station.toUpperCase() === stationCode) ||
         (item.StationCode && item.StationCode.toUpperCase() === stationCode)
       );
 
       if (!match) {
-        throw new Error(`No real-time crowd data found for station "${stationCode}". Station may be closed or unmonitored at this time.`);
+        throw new Error(`No real-time crowd data found for station "${stationCode}". Note: Data is only published during operating hours.`);
       }
 
-      // API level values are typically 'l' (low), 'm' (moderate), 'h' (high)
-      let levelRaw = (match.CrowdLevel || match.CrowdDensity || "l").toLowerCase();
+      // Read crowd density indicator ('l'/'low', 'm'/'moderate', 'h'/'high')
+      let levelRaw = (match.CrowdLevel || match.CrowdDensity || "l").toString().toLowerCase();
       
       if (levelRaw.startsWith("l")) return "low";
       if (levelRaw.startsWith("m")) return "moderate";
       if (levelRaw.startsWith("h")) return "high";
 
-      return "low"; // default fallback
+      return "low";
     }
 
     function displayResult(stationCode, crowdLevel) {
@@ -404,7 +412,6 @@
       resStationName.textContent = name;
       resLevel.textContent = crowdLevel.toUpperCase();
 
-      // Reset result styling classes
       resultBox.className = `result-card ${crowdLevel}`;
       resultBox.style.display = "block";
     }
