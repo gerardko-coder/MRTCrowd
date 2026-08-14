@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Singapore MRT Real-Time Crowdedness</title>
+  <style>
+    :root {
+      --bg-color: #f4f6f9;
+      --card-bg: #ffffff;
+      --primary: #2b3a4a;
+      --accent: #007bff;
+      --border: #e0e0e0;
+      --text: #333333;
+      --text-light: #777777;
+
+      /* Crowd Levels */
+      --low-bg: #e6f4ea;
+      --low-color: #137333;
+      --moderate-bg: #fef7e0;
+      --moderate-color: #b06000;
+      --high-bg: #fce8e6;
+      --high-color: #c5221f;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      width: 100%;
+      max-width: 480px;
+      padding: 32px 24px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--text-light);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--primary);
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      text-transform: uppercase;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    .station-name-preview {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--accent);
+      margin-top: 6px;
+      min-height: 1.2em;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      background-color: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    button:active {
+      transform: scale(0.99);
+    }
+
+    button:disabled {
+      background-color: #a0c7f4;
+      cursor: not-allowed;
+    }
+
+    .result-card {
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: 12px;
+      display: none;
+      text-align: center;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .result-card.low {
+      background-color: var(--low-bg);
+      color: var(--low-color);
+      border: 1px solid var(--low-color);
+    }
+
+    .result-card.moderate {
+      background-color: var(--moderate-bg);
+      color: var(--moderate-color);
+      border: 1px solid var(--moderate-color);
+    }
+
+    .result-card.high {
+      background-color: var(--high-bg);
+      color: var(--high-color);
+      border: 1px solid var(--high-color);
+    }
+
+    .result-title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .result-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 1.2rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    .result-card.low .result-badge { background: var(--low-color); color: #fff; }
+    .result-card.moderate .result-badge { background: var(--moderate-color); color: #fff; }
+    .result-card.high .result-badge { background: var(--high-color); color: #fff; }
+
+    .error-msg {
+      margin-top: 16px;
+      padding: 12px;
+      background-color: var(--high-bg);
+      color: var(--high-color);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      display: none;
+      text-align: center;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>🇸🇬 MRT Station Crowdedness</h1>
+      <p>Real-time passenger load indicator via LTA DataMall</p>
+    </header>
+
+    <form id="search-form">
+      <div class="form-group">
+        <label for="station-code">Station Code</label>
+        <div class="input-wrapper">
+          <input 
+            type="text" 
+            id="station-code" 
+            placeholder="e.g. NS1, EW24, DT19" 
+            autocomplete="off" 
+            required
+          />
+        </div>
+        <div id="station-preview" class="station-name-preview"></div>
+      </div>
+
+      <button type="submit" id="submit-btn">Check Crowdedness</button>
+    </form>
+
+    <div id="error-box" class="error-msg"></div>
+
+    <div id="result-box" class="result-card">
+      <div class="result-title" id="res-station-name">Jurong East (NS1)</div>
+      <p style="font-size: 0.85rem; opacity: 0.9;">Current Crowdedness Level</p>
+      <div class="result-badge" id="res-level">LOW</div>
+    </div>
+  </div>
+
+  <script>
+    // Common Station Code Mapping for Dynamic Name Lookup
+    const stationMap = {
+      "NS1": "Jurong East", "NS2": "Bukit Batok", "NS3": "Bukit Gombak", "NS4": "Choa Chu Kang",
+      "NS5": "Yew Tee", "NS7": "Kranji", "NS8": "Marsiling", "NS9": "Woodlands",
+      "NS10": "Admiralty", "NS11": "Sembawang", "NS12": "Canberra", "NS13": "Yishun",
+      "NS14": "Khatib", "NS15": "Yio Chu Kang", "NS16": "Ang Mo Kio", "NS17": "Bishan",
+      "NS18": "Braddell", "NS19": "Toa Payoh", "NS20": "Novena", "NS21": "Newton",
+      "NS22": "Orchard", "NS23": "Somerset", "NS24": "Dhoby Ghaut", "NS25": "City Hall",
+      "NS26": "Raffles Place", "NS27": "Marina Bay", "NS28": "Marina South Pier",
+
+      "EW1": "Pasir Ris", "EW2": "Tampines", "EW3": "Simei", "EW4": "Tanah Merah",
+      "EW5": "Bedok", "EW6": "Kembangan", "EW7": "Eunos", "EW8": "Paya Lebar",
+      "EW9": "Aljunied", "EW10": "Kallang", "EW11": "Lavender", "EW12": "Bugis",
+      "EW13": "City Hall", "EW14": "Raffles Place", "EW15": "Tanjong Pagar", "EW16": "Outram Park",
+      "EW17": "Tiong Bahru", "EW18": "Redhill", "EW19": "Queenstown", "EW20": "Commonwealth",
+      "EW21": "Buona Vista", "EW22": "Dover", "EW23": "Clementi", "EW24": "Jurong East",
+      "EW25": "Chinese Garden", "EW26": "Lakeside", "EW27": "Boon Lay", "EW28": "Pioneer",
+      "EW29": "Joo Koon", "EW30": "Gul Circle", "EW31": "Tuas Crescent", "EW32": "Tuas West Road", "EW33": "Tuas Link",
+
+      "NE1": "HarbourFront", "NE3": "Outram Park", "NE4": "Chinatown", "NE5": "Clarke Quay",
+      "NE6": "Dhoby Ghaut", "NE7": "Little India", "NE8": "Farrer Park", "NE9": "Boon Keng",
+      "NE10": "Potong Pasir", "NE11": "Woodleigh", "NE12": "Serangoon", "NE13": "Kovan",
+      "NE14": "Hougang", "NE15": "Buangkok", "NE16": "Sengkang", "NE17": "Punggol",
+
+      "CC1": "Dhoby Ghaut", "CC2": "Bras Basah", "CC3": "Esplanade", "CC4": "Promenade",
+      "CC5": "Nicoll Highway", "CC6": "Stadium", "CC7": "Mountbatten", "CC8": "Dakota",
+      "CC9": "Paya Lebar", "CC10": "MacPherson", "CC11": "Tai Seng", "CC12": "Bartley",
+      "CC13": "Serangoon", "CC14": "Lorong Chuan", "CC15": "Bishan", "CC16": "Marymount",
+      "CC17": "Caldecott", "CC19": "Botanic Gardens", "CC20": "Farrer Road", "CC21": "Holland Village",
+      "CC22": "Buona Vista", "CC23": "one-north", "CC24": "Kent Ridge", "CC25": "Haw Par Villa",
+      "CC26": "Pasir Panjang", "CC27": "Labrador Park", "CC28": "Telok Blangah", "CC29": "HarbourFront",
+
+      "DT1": "Bukit Panjang", "DT2": "Cashew", "DT3": "Hillview", "DT5": "Beauty World",
+      "DT6": "King Albert Park", "DT7": "Sixth Avenue", "DT8": "Tan Kah Kee", "DT9": "Botanic Gardens",
+      "DT10": "Stevens", "DT11": "Newton", "DT12": "Little India", "DT13": "Rochor",
+      "DT14": "Bugis", "DT15": "Promenade", "DT16": "Bayfront", "DT17": "Downtown",
+      "DT18": "Telok Ayer", "DT19": "Chinatown", "DT20": "Fort Canning", "DT21": "Bencoolen",
+      "DT22": "Jalan Besar", "DT23": "Bendemeer", "DT24": "Geylang Bahru", "DT25": "Mattar",
+      "DT26": "MacPherson", "DT27": "Ubi", "DT28": "Kaki Bukit", "DT29": "Bedok North",
+      "DT30": "Bedok Reservoir", "DT31": "Tampines West", "DT32": "Tampines", "DT33": "Tampines East",
+      "DT34": "Upper Changi", "DT35": "Expo",
+
+      "TE1": "Woodlands North", "TE2": "Woodlands", "TE3": "Woodlands South", "TE4": "Springleaf",
+      "TE5": "Lentor", "TE6": "Mayflower", "TE7": "Bright Hill", "TE8": "Upper Thomson",
+      "TE9": "Caldecott", "TE11": "Stevens", "TE12": "Napier", "TE13": "Orchard Boulevard",
+      "TE14": "Orchard", "TE15": "Great World", "TE16": "Havelock", "TE17": "Outram Park",
+      "TE18": "Maxwell", "TE19": "Shenton Way", "TE20": "Marina Bay", "TE22": "Gardens by the Bay"
+    };
+
+    const API_URL = "https://datamall2.mytransport.sg/ltaodataservice/PCDRealTime";
+    const API_KEY = "mlfDLYgcQGS+KM8/azN30Q==";
+
+    const inputEl = document.getElementById("station-code");
+    const previewEl = document.getElementById("station-preview");
+    const formEl = document.getElementById("search-form");
+    const submitBtn = document.getElementById("submit-btn");
+    const resultBox = document.getElementById("result-box");
+    const errorBox = document.getElementById("error-box");
+    const resStationName = document.getElementById("res-station-name");
+    const resLevel = document.getElementById("res-level");
+
+    // Dynamic Station Name lookup as user types
+    inputEl.addEventListener("input", () => {
+      const code = inputEl.value.trim().toUpperCase();
+      if (stationMap[code]) {
+        previewEl.textContent = `📍 ${stationMap[code]}`;
+      } else if (code.length >= 2) {
+        previewEl.textContent = "Station code not in local list (will query API)";
+      } else {
+        previewEl.textContent = "";
+      }
+    });
+
+    formEl.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      const code = inputEl.value.trim().toUpperCase();
+      if (!code) return;
+
+      // Reset UI
+      errorBox.style.display = "none";
+      resultBox.style.display = "none";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Fetching Data...";
+
+      try {
+        const crowdData = await fetchCrowdData(code);
+        displayResult(code, crowdData);
+      } catch (err) {
+        showError(err.message || "Failed to fetch crowdedness data.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Check Crowdedness";
+      }
+    });
+
+    async function fetchCrowdData(stationCode) {
+      // Determine train line prefix (e.g. NS, EW, DT, CC, TE, NE)
+      const lineMatch = stationCode.match(/^[A-Z]+/);
+      const trainLine = lineMatch ? lineMatch[0] : "";
+
+      let targetUrl = API_URL;
+      if (trainLine) {
+        targetUrl += `?TrainLine=${trainLine}`;
+      }
+
+      // Try direct API call first
+      try {
+        const response = await fetch(targetUrl, {
+          method: "GET",
+          headers: {
+            "AccountKey": API_KEY,
+            "accept": "application/json"
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return parseStationCrowd(data, stationCode);
+        }
+      } catch (e) {
+        console.warn("Direct API call blocked (likely CORS). Retrying via proxy fallback...");
+      }
+
+      // Fallback via CORS proxy if direct fetch is blocked by browser policy
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      const response = await fetch(proxyUrl, {
+        method: "GET",
+        headers: {
+          "AccountKey": API_KEY,
+          "accept": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      return parseStationCrowd(data, stationCode);
+    }
+
+    function parseStationCrowd(data, stationCode) {
+      const records = data.value || [];
+      
+      // Match exact station code
+      const match = records.find(item => 
+        (item.Station && item.Station.toUpperCase() === stationCode) ||
+        (item.StationCode && item.StationCode.toUpperCase() === stationCode)
+      );
+
+      if (!match) {
+        throw new Error(`No real-time crowd data found for station "${stationCode}". Station may be closed or unmonitored at this time.`);
+      }
+
+      // API level values are typically 'l' (low), 'm' (moderate), 'h' (high)
+      let levelRaw = (match.CrowdLevel || match.CrowdDensity || "l").toLowerCase();
+      
+      if (levelRaw.startsWith("l")) return "low";
+      if (levelRaw.startsWith("m")) return "moderate";
+      if (levelRaw.startsWith("h")) return "high";
+
+      return "low"; // default fallback
+    }
+
+    function displayResult(stationCode, crowdLevel) {
+      const name = stationMap[stationCode] 
+        ? `${stationMap[stationCode]} (${stationCode})`
+        : stationCode;
+
+      resStationName.textContent = name;
+      resLevel.textContent = crowdLevel.toUpperCase();
+
+      // Reset result styling classes
+      resultBox.className = `result-card ${crowdLevel}`;
+      resultBox.style.display = "block";
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+    }
+  </script>
+</body>
+</html>
