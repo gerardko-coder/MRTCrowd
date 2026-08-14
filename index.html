@@ -49,9 +49,11 @@
       padding: 32px 24px;
     }
 
+    /* Fixed header area so layout never shifts */
     header {
       text-align: center;
       margin-bottom: 24px;
+      min-height: 52px;
     }
 
     header h1 {
@@ -79,7 +81,7 @@
 
     select {
       width: 100%;
-      padding: 12px 16px;
+      padding: 14px 16px;
       font-size: 1rem;
       border: 2px solid var(--border);
       border-radius: 8px;
@@ -95,39 +97,30 @@
       border-color: var(--accent);
     }
 
-    button {
-      width: 100%;
-      padding: 14px;
-      background-color: var(--accent);
-      color: #ffffff;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
+    /* Fixed-height display area to prevent vertical movement */
+    .display-area {
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .loading-spinner {
+      display: none;
+      font-size: 0.95rem;
+      color: var(--accent);
       font-weight: 600;
-      cursor: pointer;
-      transition: background-color 0.2s, transform 0.1s;
-    }
-
-    button:hover {
-      background-color: #0056b3;
-    }
-
-    button:active {
-      transform: scale(0.99);
-    }
-
-    button:disabled {
-      background-color: #a0c7f4;
-      cursor: not-allowed;
+      text-align: center;
     }
 
     .result-card {
-      margin-top: 24px;
+      width: 100%;
       padding: 20px;
       border-radius: 12px;
       display: none;
       text-align: center;
-      animation: fadeIn 0.3s ease-in-out;
+      animation: fadeIn 0.2s ease-in-out;
     }
 
     .result-card.low {
@@ -170,7 +163,7 @@
     .result-card.high .result-badge { background: var(--high-color); color: #fff; }
 
     .error-msg {
-      margin-top: 16px;
+      width: 100%;
       padding: 12px;
       background-color: var(--high-bg);
       color: var(--high-color);
@@ -178,11 +171,18 @@
       font-size: 0.85rem;
       display: none;
       text-align: center;
+      animation: fadeIn 0.2s ease-in-out;
+    }
+
+    .placeholder-msg {
+      font-size: 0.9rem;
+      color: var(--text-light);
+      text-align: center;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
     }
   </style>
 </head>
@@ -194,28 +194,29 @@
       <p>Real-time passenger load indicator via LTA DataMall</p>
     </header>
 
-    <form id="search-form">
-      <div class="form-group">
-        <label for="station-select">Select Station</label>
-        <select id="station-select" required>
-          <option value="" disabled selected>-- Choose an MRT Station --</option>
-        </select>
+    <div class="form-group">
+      <label for="station-select">Select Station</label>
+      <select id="station-select">
+        <option value="" disabled selected>-- Choose an MRT Station --</option>
+      </select>
+    </div>
+
+    <!-- Layout container that holds its structure regardless of outcome -->
+    <div class="display-area">
+      <div id="placeholder-msg" class="placeholder-msg">Select a station above to view real-time crowdedness.</div>
+      <div id="loading-box" class="loading-spinner">⏳ Fetching real-time status...</div>
+      <div id="error-box" class="error-msg"></div>
+
+      <div id="result-box" class="result-card">
+        <div class="result-title" id="res-station-name">Station Name</div>
+        <p style="font-size: 0.85rem; opacity: 0.9;">Current Crowdedness Level</p>
+        <div class="result-badge" id="res-level">LOW</div>
       </div>
-
-      <button type="submit" id="submit-btn">Check Crowdedness</button>
-    </form>
-
-    <div id="error-box" class="error-msg"></div>
-
-    <div id="result-box" class="result-card">
-      <div class="result-title" id="res-station-name">Jurong East (NS1)</div>
-      <p style="font-size: 0.85rem; opacity: 0.9;">Current Crowdedness Level</p>
-      <div class="result-badge" id="res-level">LOW</div>
     </div>
   </div>
 
   <script>
-    // Structured Station Master Dataset grouped by MRT Line
+    // Station Master Dataset grouped by MRT Line
     const stationData = {
       "North-South Line (NSL)": {
         "NS1": "Jurong East", "NS2": "Bukit Batok", "NS3": "Bukit Gombak", "NS4": "Choa Chu Kang",
@@ -271,24 +272,16 @@
       }
     };
 
-    // Mapping station prefixes to LTA API TrainLine parameter values
     const trainLineMap = {
-      "NS": "NSL",
-      "EW": "EWL",
-      "CG": "EWL",
-      "NE": "NEL",
-      "CC": "CCL",
-      "CE": "CCL",
-      "DT": "DTL",
-      "TE": "TEL"
+      "NS": "NSL", "EW": "EWL", "CG": "EWL", "NE": "NEL",
+      "CC": "CCL", "CE": "CCL", "DT": "DTL", "TE": "TEL"
     };
 
-    // Flat lookup for station code to name
     const flatStationMap = {};
 
     const selectEl = document.getElementById("station-select");
-    const formEl = document.getElementById("search-form");
-    const submitBtn = document.getElementById("submit-btn");
+    const placeholderMsg = document.getElementById("placeholder-msg");
+    const loadingBox = document.getElementById("loading-box");
     const resultBox = document.getElementById("result-box");
     const errorBox = document.getElementById("error-box");
     const resStationName = document.getElementById("res-station-name");
@@ -297,7 +290,7 @@
     const API_BASE = "https://datamall2.mytransport.sg/ltaodataservice/PCDRealTime";
     const API_KEY = "mlfDLYgcQGS+KM8/azN30Q==";
 
-    // Populate drop-down list dynamically with optgroups per train line
+    // Populate drop-down list
     function populateDropdown() {
       for (const [lineName, stations] of Object.entries(stationData)) {
         const optgroup = document.createElement("optgroup");
@@ -317,16 +310,16 @@
 
     populateDropdown();
 
-    formEl.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      
+    // Trigger API call directly upon selecting a station from the dropdown
+    selectEl.addEventListener("change", async () => {
       const code = selectEl.value;
       if (!code) return;
 
+      // Reset views
+      placeholderMsg.style.display = "none";
       errorBox.style.display = "none";
       resultBox.style.display = "none";
-      submitBtn.disabled = true;
-      submitBtn.textContent = "Fetching Data...";
+      loadingBox.style.display = "block";
 
       try {
         const crowdData = await fetchCrowdData(code);
@@ -334,8 +327,7 @@
       } catch (err) {
         showError(err.message || "Failed to fetch crowdedness data.");
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Check Crowdedness";
+        loadingBox.style.display = "none";
       }
     });
 
@@ -390,7 +382,7 @@
       );
 
       if (!match) {
-        throw new Error(`No real-time crowd data found for station "${stationCode}". Data is published during station operating hours.`);
+        throw new Error(`No real-time crowd data found for station "${stationCode}". Data is published during operating hours.`);
       }
 
       let levelRaw = (match.CrowdLevel || match.CrowdDensity || "l").toString().toLowerCase();
